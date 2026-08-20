@@ -25,6 +25,8 @@ or build from a checkout:
 go build -o swarmforge ./cmd/swarmforge
 ```
 
+or download a prebuilt binary from the [Releases](https://github.com/TorratDev/swarm-forge-go/releases) page.
+
 ## Getting Started
 
 Scaffold a new project from one of the built-in packs (see [Packs](#packs) below):
