@@ -286,9 +286,19 @@ func (r *Run) exitPollLoop(ctx context.Context) {
 					r.exited <- name
 				}
 			}
+		} else {
+			// The session itself is gone -- e.g. its last window's pane
+			// process just exited, taking the whole session down with it
+			// before this loop could observe an intermediate state where
+			// only some windows had disappeared. Every role still marked
+			// expected really did exit, so report all of them rather than
+			// silently dropping the signal (the caller-visible symptom
+			// otherwise: run.Exited() never fires at all).
+			for name := range expected {
+				delete(expected, name)
+				r.exited <- name
+			}
 		}
-		// else: session is gone entirely; the KillSession/Shutdown path
-		// already accounts for that -- nothing more to report here.
 		if waitOrDone(ctx, PollInterval, pollCheckInterval) {
 			return
 		}
