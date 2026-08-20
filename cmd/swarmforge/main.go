@@ -16,6 +16,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// version, commit, and date are overridden at build time via
+// -ldflags "-X main.version=... -X main.commit=... -X main.date=...".
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func realEnv() cli.Env {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -39,6 +47,7 @@ func main() {
 	root := &cobra.Command{
 		Use:           "swarmforge",
 		Short:         "Orchestrate a swarm of AI coding-agent CLIs across git worktrees",
+		Version:       fmt.Sprintf("%s (commit %s, built %s)", version, commit, date),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
