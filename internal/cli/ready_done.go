@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/TorratDev/swarm-forge/internal/handoff"
-	"github.com/TorratDev/swarm-forge/internal/state"
+	"github.com/TorratDev/swarm-forge-go/internal/handoff"
+	"github.com/TorratDev/swarm-forge-go/internal/state"
 )
 
 func currentRole(env Env) (string, state.Role, state.State, int, bool) {

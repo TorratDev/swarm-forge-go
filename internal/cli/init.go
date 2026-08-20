@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/TorratDev/swarm-forge/internal/pack"
+	"github.com/TorratDev/swarm-forge-go/internal/pack"
 )
 
 // RunInit materializes an embedded pack definition into destDir:

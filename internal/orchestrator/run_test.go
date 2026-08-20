@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TorratDev/swarm-forge/internal/handoff"
-	"github.com/TorratDev/swarm-forge/internal/launch"
+	"github.com/TorratDev/swarm-forge-go/internal/handoff"
+	"github.com/TorratDev/swarm-forge-go/internal/launch"
 )
 
 func requirePython(t *testing.T) {

@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TorratDev/swarm-forge/internal/cli"
-	"github.com/TorratDev/swarm-forge/internal/daemon"
-	"github.com/TorratDev/swarm-forge/internal/orchestrator"
-	"github.com/TorratDev/swarm-forge/internal/pack"
+	"github.com/TorratDev/swarm-forge-go/internal/cli"
+	"github.com/TorratDev/swarm-forge-go/internal/daemon"
+	"github.com/TorratDev/swarm-forge-go/internal/orchestrator"
+	"github.com/TorratDev/swarm-forge-go/internal/pack"
 )
 
 // scaffoldPack generates and prepares a real project from an embedded

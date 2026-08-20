@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/TorratDev/swarm-forge/internal/config"
-	"github.com/TorratDev/swarm-forge/internal/gitutil"
-	"github.com/TorratDev/swarm-forge/internal/state"
-	"github.com/TorratDev/swarm-forge/internal/trust"
+	"github.com/TorratDev/swarm-forge-go/internal/config"
+	"github.com/TorratDev/swarm-forge-go/internal/gitutil"
+	"github.com/TorratDev/swarm-forge-go/internal/state"
+	"github.com/TorratDev/swarm-forge-go/internal/trust"
 )
 
 // Result summarizes what Prepare did, for "swarmforge up" to report.

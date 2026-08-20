@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/TorratDev/swarm-forge/internal/gitutil"
+	"github.com/TorratDev/swarm-forge-go/internal/gitutil"
 )
 
 // Role is one configured swarm participant.

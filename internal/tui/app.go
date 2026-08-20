@@ -18,7 +18,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/TorratDev/swarm-forge/internal/orchestrator"
+	"github.com/TorratDev/swarm-forge-go/internal/orchestrator"
 )
 
 // tickInterval is the render refresh rate: how often the TUI re-reads the

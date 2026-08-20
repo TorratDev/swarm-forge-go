@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TorratDev/swarm-forge/internal/cli"
+	"github.com/TorratDev/swarm-forge-go/internal/cli"
 )
 
 func requirePython(t *testing.T) {

@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/TorratDev/swarm-forge/internal/config"
-	"github.com/TorratDev/swarm-forge/internal/daemon"
-	"github.com/TorratDev/swarm-forge/internal/launch"
-	"github.com/TorratDev/swarm-forge/internal/ptyagent"
-	"github.com/TorratDev/swarm-forge/internal/state"
-	"github.com/TorratDev/swarm-forge/internal/termemu"
+	"github.com/TorratDev/swarm-forge-go/internal/config"
+	"github.com/TorratDev/swarm-forge-go/internal/daemon"
+	"github.com/TorratDev/swarm-forge-go/internal/launch"
+	"github.com/TorratDev/swarm-forge-go/internal/ptyagent"
+	"github.com/TorratDev/swarm-forge-go/internal/state"
+	"github.com/TorratDev/swarm-forge-go/internal/termemu"
 )
 
 const (

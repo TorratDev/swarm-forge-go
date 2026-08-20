@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/TorratDev/swarm-forge/internal/state"
+	"github.com/TorratDev/swarm-forge-go/internal/state"
 )
 
 // TestProjectRootDiscoverableFromWorktree pins down a load-bearing design

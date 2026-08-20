@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/TorratDev/swarm-forge/internal/gitutil"
-	"github.com/TorratDev/swarm-forge/internal/handoff"
-	"github.com/TorratDev/swarm-forge/internal/state"
+	"github.com/TorratDev/swarm-forge-go/internal/gitutil"
+	"github.com/TorratDev/swarm-forge-go/internal/handoff"
+	"github.com/TorratDev/swarm-forge-go/internal/state"
 )
 
 const draftUsage = `Usage: swarmforge handoff <draft-file>

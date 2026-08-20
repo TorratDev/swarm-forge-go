@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/TorratDev/swarm-forge/internal/orchestrator"
-	"github.com/TorratDev/swarm-forge/internal/tui"
+	"github.com/TorratDev/swarm-forge-go/internal/orchestrator"
+	"github.com/TorratDev/swarm-forge-go/internal/tui"
 )
 
 // RunUp prepares a swarm (validates swarmforge.yaml, creates git

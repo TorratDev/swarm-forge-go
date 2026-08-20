@@ -15,7 +15,7 @@ This is a from-scratch Go rewrite of the original Babashka/shell implementation.
 ## Install
 
 ```sh
-go install github.com/TorratDev/swarm-forge/cmd/swarmforge@latest
+go install github.com/TorratDev/swarm-forge-go/cmd/swarmforge@main
 ```
 
 or build from a checkout:

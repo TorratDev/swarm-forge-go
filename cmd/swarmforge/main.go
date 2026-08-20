@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/TorratDev/swarm-forge/internal/cli"
+	"github.com/TorratDev/swarm-forge-go/internal/cli"
 	"github.com/spf13/cobra"
 )
 
