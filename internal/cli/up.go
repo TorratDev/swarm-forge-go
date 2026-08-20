@@ -6,25 +6,34 @@ import (
 	"os/signal"
 	"syscall"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/TorratDev/swarm-forge-go/internal/orchestrator"
-	"github.com/TorratDev/swarm-forge-go/internal/tui"
+	"github.com/TorratDev/swarm-forge-go/internal/tmux"
 )
 
 // RunUp prepares a swarm (validates swarmforge.yaml, creates git
 // worktrees, patches Claude Code's trust dialog, writes state.json),
-// launches every configured role's agent process under its own PTY, and
-// takes over the terminal with the multi-pane TUI until the operator
-// quits (leader+q) or the cleanup role's process exits.
+// launches every configured role's agent process in its own tmux window,
+// and attaches the operator's terminal to that session.
 //
-// This function fundamentally needs a real terminal (bubbletea reads/
-// writes os.Stdin/os.Stdout directly for the interactive session), so
-// unlike the other command handlers it isn't practical to drive through
+// Detaching (tmux's prefix+d) does not stop the swarm: the handoff daemon
+// is an in-process goroutine, so this process must keep running for the
+// swarm's whole lifetime, independent of whether anyone is attached to
+// look at it -- only an explicit "swarmforge down", a SIGTERM, or the
+// cleanup role's own tmux window exiting tears it down. "swarmforge
+// attach" is the explicit way back in after a detach.
+//
+// This function fundamentally needs a real terminal (tmux attach-session
+// reads/writes os.Stdin/os.Stdout directly for the interactive session),
+// so unlike the other command handlers it isn't practical to drive through
 // Env's io.Writer abstraction end-to-end -- Prepare/Launch (the part that
 // can go wrong non-interactively) are covered by internal/orchestrator's
 // own tests instead.
 func RunUp(env Env) int {
+	if !tmux.Available() {
+		fmt.Fprintln(env.Stderr, "swarmforge up: tmux is required but not found on PATH (tmux >= 3.0)")
+		return 1
+	}
+
 	result, err := orchestrator.Prepare(env.Cwd)
 	if err != nil {
 		fmt.Fprintln(env.Stderr, "swarmforge up:", err)
@@ -39,31 +48,44 @@ func RunUp(env Env) int {
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
-	programDone := make(chan struct{})
 	go func() {
 		select {
 		case <-sigCh:
 			run.Shutdown()
-		case <-programDone:
+		case <-run.ShutdownCh():
 		}
 	}()
 
-	roles := make([]string, len(result.Project.Roles))
-	for i, r := range result.Project.Roles {
-		roles[i] = r.Name
+	go func() {
+		for role := range run.Exited() {
+			if role == run.CleanupRole() {
+				run.Shutdown()
+				return
+			}
+		}
+	}()
+
+	attachErrCh := make(chan error, 1)
+	go func() {
+		cmd := run.AttachCmd()
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+		attachErrCh <- cmd.Run()
+	}()
+
+	for {
+		select {
+		case <-attachErrCh:
+			select {
+			case <-run.ShutdownCh():
+				return 0
+			default:
+				fmt.Fprintf(env.Stdout, "Detached. Swarm still running.\nReattach: swarmforge attach\n  or: tmux -S %s attach -t %s\nStop it:  swarmforge down\n",
+					result.State.TmuxSocket, result.State.TmuxSession)
+				<-run.ShutdownCh()
+				return 0
+			}
+		case <-run.ShutdownCh():
+			return 0
+		}
 	}
-
-	program := tea.NewProgram(tui.New(run, roles), tea.WithAltScreen())
-	_, runErr := program.Run()
-	close(programDone)
-
-	// Idempotent via sync.Once: a no-op if the TUI (leader+q, or the
-	// cleanup role exiting) or the signal handler above already ran it.
-	run.Shutdown()
-
-	if runErr != nil {
-		fmt.Fprintln(env.Stderr, "swarmforge up:", runErr)
-		return 1
-	}
-	return 0
 }

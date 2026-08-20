@@ -1,14 +1,10 @@
 package cli
 
-import "path/filepath"
+import (
+	"path/filepath"
 
-// shimNames maps the legacy script basenames role prompts still invoke to
-// the subcommand that now implements them.
-var shimNames = map[string]string{
-	"swarm_handoff.sh":     "handoff",
-	"ready_for_next.sh":    "ready",
-	"done_with_current.sh": "done",
-}
+	"github.com/TorratDev/swarm-forge-go/internal/shim"
+)
 
 // DispatchShim checks whether args[0]'s basename is one of the legacy
 // script names installed as symlinks to this binary (see
@@ -20,7 +16,7 @@ func DispatchShim(args []string, env Env) (code int, handled bool) {
 	if len(args) == 0 {
 		return 0, false
 	}
-	name, ok := shimNames[filepath.Base(args[0])]
+	name, ok := shim.Names[filepath.Base(args[0])]
 	if !ok {
 		return 0, false
 	}

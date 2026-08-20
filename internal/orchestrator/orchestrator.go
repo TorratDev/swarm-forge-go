@@ -1,8 +1,9 @@
 // Package orchestrator implements "swarmforge up"'s startup sequencing:
 // validating swarmforge.yaml, ensuring the git repo and per-role
 // worktrees exist, pre-accepting Claude Code's trust dialog, and writing
-// .swarmforge/state.json. Launching agent processes themselves is the
-// PTY/TUI layer's job and is not implemented here yet.
+// .swarmforge/state.json (Prepare, this file), then launching every
+// role's agent process as its own tmux window and running the
+// handoff-delivery daemon (Launch/Shutdown, run.go).
 package orchestrator
 
 import (
@@ -14,6 +15,7 @@ import (
 	"github.com/TorratDev/swarm-forge-go/internal/config"
 	"github.com/TorratDev/swarm-forge-go/internal/gitutil"
 	"github.com/TorratDev/swarm-forge-go/internal/state"
+	"github.com/TorratDev/swarm-forge-go/internal/tmux"
 	"github.com/TorratDev/swarm-forge-go/internal/trust"
 )
 
@@ -90,7 +92,16 @@ func Prepare(projectRoot string) (Result, error) {
 		}
 	}
 
-	st := state.State{Roles: roles}
+	if err := InstallShims(BinDir(projectRoot)); err != nil {
+		return Result{}, fmt.Errorf("installing legacy-script shims: %w", err)
+	}
+
+	socket, err := tmux.SocketPath(projectRoot)
+	if err != nil {
+		return Result{}, err
+	}
+
+	st := state.State{Roles: roles, TmuxSocket: socket, TmuxSession: tmux.SessionName}
 	if err := state.Save(projectRoot, st); err != nil {
 		return Result{}, err
 	}

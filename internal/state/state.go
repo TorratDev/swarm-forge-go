@@ -27,9 +27,17 @@ type Role struct {
 type State struct {
 	Version int    `json:"version"`
 	Roles   []Role `json:"roles"`
+
+	// TmuxSocket and TmuxSession address the project's tmux session:
+	// computed once in orchestrator.Prepare (pure functions of the project
+	// root, no live tmux process needed) so down, attach, and the handoff
+	// notifier can all address it the same way ReadPID addresses the pid
+	// file, without recomputing the socket/session convention themselves.
+	TmuxSocket  string `json:"tmux_socket"`
+	TmuxSession string `json:"tmux_session"`
 }
 
-const CurrentVersion = 1
+const CurrentVersion = 2
 
 // RelPath is state.json's location relative to a project root.
 const RelPath = ".swarmforge/state.json"

@@ -2,14 +2,15 @@
 
 **A single-binary agent orchestration platform that turns swarms of AI agents into reliable, professional software engineers.**
 
-SwarmForge coordinates several AI coding-agent CLIs (`claude`, `codex`, `copilot`, `grok`) working in parallel on the same project: each configured role gets its own git worktree and its own pane in a built-in terminal UI, and roles hand off work to each other through a durable, file-based message queue.
+SwarmForge coordinates several AI coding-agent CLIs (`claude`, `codex`, `copilot`, `grok`) working in parallel on the same project: each configured role gets its own git worktree and its own real tmux window, and roles hand off work to each other through a durable, file-based message queue.
 
-This is a from-scratch Go rewrite of the original Babashka/shell implementation. There is no more tmux, no OS-specific terminal-emulator adapters, and no `./swarm` curl+tar bootstrap — one `swarmforge` binary does everything, and it draws its own multi-pane view directly in your terminal.
+This is a from-scratch Go rewrite of the original Babashka/shell implementation. There's no more `./swarm` curl+tar bootstrap and no OS-specific terminal-emulator adapters — one `swarmforge` binary does everything, and each project gets its own isolated tmux session (its own socket, so it never collides with your own tmux) with one window per configured role.
 
 ## Prerequisites
 
 - `git`
-- Go 1.24+ (only to build; the built binary has no further runtime dependency beyond the agent CLIs below)
+- `tmux` >= 3.0
+- Go 1.24+ (only to build; the built binary has no further runtime dependency beyond `tmux` and the agent CLIs below)
 - At least one configured agent backend: `claude`, `codex`, `copilot`, or `grok`
 
 ## Install
@@ -34,7 +35,7 @@ cd path/to/project
 swarmforge up
 ```
 
-`init` writes `swarmforge.yaml` plus `swarmforge/roles/*.prompt` and `swarmforge/constitution/` into the target directory — plain files you can edit afterward, generated once and never overwritten. `up` then validates that config, creates a git worktree per role, pre-accepts Claude Code's workspace-trust dialog for `claude` roles, launches every role's agent CLI under its own pseudo-terminal, and takes over your terminal with the swarm view.
+`init` writes `swarmforge.yaml` plus `swarmforge/roles/*.prompt` and `swarmforge/constitution/` into the target directory — plain files you can edit afterward, generated once and never overwritten. `up` then validates that config, creates a git worktree per role, pre-accepts Claude Code's workspace-trust dialog for `claude` roles, creates the project's tmux session with one window per role running that role's agent CLI directly, and attaches your terminal to it.
 
 To stop a swarm from another terminal:
 
@@ -42,16 +43,17 @@ To stop a swarm from another terminal:
 swarmforge down path/to/project   # defaults to the current directory
 ```
 
-### TUI controls
+### Detaching and reattaching
 
-There's no tmux prefix key anymore, but the idea carries over: **Ctrl-A** is the leader key. Press it, then:
+This is a real tmux session, so native tmux keys work as usual: `prefix+w` lists/switches windows, `prefix+<n>` jumps to window *n*, `prefix+d` detaches.
 
-- a digit (`1`-`9`) switches the focused pane to that role
-- `q` quits and tears down the whole swarm
+Detaching does **not** stop the swarm — the handoff daemon runs inside the `swarmforge up` process itself, so that process stays alive (and keeps delivering handoffs) for the swarm's whole lifetime, whether or not anyone is attached to look at it. After detaching:
 
-Every other keystroke — including Ctrl-C — passes straight through to the focused pane's agent process, exactly as if you'd typed it directly into that CLI.
+```sh
+swarmforge attach path/to/project   # reattach; defaults to the current directory
+```
 
-Closing the pane belonging to the **first role listed** in `swarmforge.yaml` (the "cleanup role") tears down the entire swarm, matching the rest of the roles' teardown behavior.
+Only `swarmforge down`, a signal to the `swarmforge up` process, or the **first role listed** in `swarmforge.yaml` (the "cleanup role") exiting on its own tears down the entire swarm.
 
 ## Packs
 
@@ -95,7 +97,7 @@ roles:
 - `worktree` is `master` (or `none`) to run in the main working directory, or any other unique name to get `.worktrees/<name>` on branch `swarmforge-<name>`.
 - `receive_mode` is `task` (default) or `batch`. `batch` roles consume every currently queued equal-priority handoff as one batch instead of one task at a time.
 - `extra_args` are passed straight through to the agent CLI's argv.
-- The **first role in the list** is the cleanup role (see [TUI controls](#tui-controls)).
+- The **first role in the list** is the cleanup role (see [Detaching and reattaching](#detaching-and-reattaching)).
 
 ### Permission mode for `claude` and `grok` roles
 
@@ -112,7 +114,7 @@ SwarmForge auto-injects a permission-mode flag so an unattended agent doesn't st
 
 ## Handoff Protocol
 
-Agents don't message each other directly. Each role's worktree gets a `.swarmforge/handoffs/` directory (`outbox`, `sent`, `failed`, `inbox/{new,in_process,completed}`), and while a swarm is running, a delivery goroutine inside `swarmforge up` polls every role's outbox, copies validated handoffs into each recipient's inbox, and wakes the recipient by writing directly into its pane.
+Agents don't message each other directly. Each role's worktree gets a `.swarmforge/handoffs/` directory (`outbox`, `sent`, `failed`, `inbox/{new,in_process,completed}`), and while a swarm is running, a delivery goroutine inside `swarmforge up` polls every role's outbox, copies validated handoffs into each recipient's inbox, and wakes the recipient with a `tmux send-keys` message into its window.
 
 Agents interact with this queue through three commands (also installed on `PATH` under their original script names — `swarm_handoff.sh`, `ready_for_next.sh`, `done_with_current.sh` — so existing role prompts work unmodified):
 
@@ -167,12 +169,14 @@ go test ./...
 go test -race ./...
 ```
 
+`internal/tmux` and the tmux-backed `internal/orchestrator` tests skip themselves if `tmux` isn't on `PATH`.
+
 Package layout:
 
 ```text
 cmd/swarmforge/       entry point; argv0 dispatch for the legacy script names
 internal/
-  cli/                command handlers (init, up, down, handoff, ready, done, pack)
+  cli/                command handlers (init, up, down, attach, handoff, ready, done, pack)
   config/              swarmforge.yaml schema + validation
   state/               .swarmforge/state.json + project-root discovery
   handoff/             header parse/serialize, filenames, draft validation, queue state machine
@@ -180,9 +184,7 @@ internal/
   gitutil/               git plumbing: worktrees, commit canonicalization
   trust/                 ~/.claude.json trust-dialog patcher
   launch/                 per-backend argv builders
+  tmux/                   tmux(1) session/window lifecycle, send-keys, exit polling
   orchestrator/           startup sequencing, live swarm (launch/daemon/teardown)
-  ptyagent/               PTY-backed subprocess spawn/resize/teardown
-  termemu/                vt10x-backed virtual screen per agent
-  tui/                    the multi-pane bubbletea app
   pack/                   pack schema, embedded pack definitions, generator
 ```

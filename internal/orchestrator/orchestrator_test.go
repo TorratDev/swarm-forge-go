@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/TorratDev/swarm-forge-go/internal/pack"
+	"github.com/TorratDev/swarm-forge-go/internal/shim"
 	"github.com/TorratDev/swarm-forge-go/internal/state"
 )
 
@@ -62,6 +63,28 @@ func TestPrepareCreatesWorktreesAndState(t *testing.T) {
 	}
 	if !loaded.RoleKnown("coder") || !loaded.RoleKnown("cleaner") {
 		t.Fatalf("state.json missing expected roles: %+v", loaded)
+	}
+	if loaded.TmuxSocket == "" || loaded.TmuxSession == "" {
+		t.Fatalf("state.json missing tmux socket/session: %+v", loaded)
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantTarget, err := filepath.EvalSymlinks(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name := range shim.Names {
+		link := filepath.Join(BinDir(root), name)
+		target, err := filepath.EvalSymlinks(link)
+		if err != nil {
+			t.Fatalf("shim %q not installed: %v", name, err)
+		}
+		if target != wantTarget {
+			t.Fatalf("shim %q resolves to %q, want %q", name, target, wantTarget)
+		}
 	}
 
 	for _, d := range []string{

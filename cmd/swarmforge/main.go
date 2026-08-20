@@ -43,7 +43,7 @@ func main() {
 		SilenceErrors: true,
 	}
 
-	root.AddCommand(handoffCmd(), readyCmd(), doneCmd(), initCmd(), upCmd(), downCmd(), packCmd())
+	root.AddCommand(handoffCmd(), readyCmd(), doneCmd(), initCmd(), upCmd(), downCmd(), attachCmd(), packCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "swarmforge:", err)
@@ -103,7 +103,7 @@ func initCmd() *cobra.Command {
 func upCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "up",
-		Short: "Launch the swarm and take over the terminal with the multi-pane TUI",
+		Short: "Launch the swarm and attach to its tmux session",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return exitCode(cli.RunUp(realEnv()))
 		},
@@ -122,6 +122,22 @@ func downCmd() *cobra.Command {
 				dir = args[0]
 			}
 			return exitCode(cli.RunDown(env, dir))
+		},
+	}
+}
+
+func attachCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "attach [dir]",
+		Short: "Attach to a running swarm's tmux session",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			env := realEnv()
+			dir := env.Cwd
+			if len(args) == 1 {
+				dir = args[0]
+			}
+			return exitCode(cli.RunAttach(env, dir))
 		},
 	}
 }

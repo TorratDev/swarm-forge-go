@@ -5,18 +5,25 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/TorratDev/swarm-forge-go/internal/handoff"
 	"github.com/TorratDev/swarm-forge-go/internal/launch"
+	"github.com/TorratDev/swarm-forge-go/internal/tmux"
 )
 
 func requirePython(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 not available")
+	}
+}
+
+func requireTmux(t *testing.T) {
+	t.Helper()
+	if !tmux.Available() {
+		t.Skip("tmux not available")
 	}
 }
 
@@ -30,10 +37,6 @@ func idleSpawn(agent string, spec launch.Spec) (string, []string, error) {
 
 func quickExitSpawn(agent string, spec launch.Spec) (string, []string, error) {
 	return "python3", []string{"-c", "pass"}, nil
-}
-
-func processAlive(pid int) bool {
-	return syscall.Kill(pid, 0) == nil
 }
 
 func waitUntil(t *testing.T, timeout time.Duration, cond func() bool) {
@@ -50,6 +53,7 @@ func waitUntil(t *testing.T, timeout time.Duration, cond func() bool) {
 
 func TestLaunchStartsAgentsAndWritesPIDFile(t *testing.T) {
 	requirePython(t)
+	requireTmux(t)
 	root := scaffoldTwoPack(t)
 	t.Setenv("HOME", t.TempDir())
 	result, err := Prepare(root)
@@ -72,16 +76,20 @@ func TestLaunchStartsAgentsAndWritesPIDFile(t *testing.T) {
 		t.Fatalf("PID file = %q, want this test process's pid %d", pidBytes, os.Getpid())
 	}
 
-	for _, role := range []string{"coder", "cleaner"} {
-		agent, ok := run.Agent(role)
-		if !ok {
-			t.Fatalf("no agent launched for role %q", role)
-		}
-		if !processAlive(agent.Cmd.Process.Pid) {
-			t.Fatalf("role %q's process is not running", role)
-		}
-		if _, ok := run.Screen(role); !ok {
-			t.Fatalf("no screen for role %q", role)
+	if !run.tmux.HasSession() {
+		t.Fatalf("no tmux session after Launch")
+	}
+	windows, err := run.tmux.ListWindows()
+	if err != nil {
+		t.Fatalf("ListWindows: %v", err)
+	}
+	want := map[string]bool{"coder": true, "cleaner": true}
+	if len(windows) != 2 {
+		t.Fatalf("ListWindows() = %v, want 2 windows", windows)
+	}
+	for _, w := range windows {
+		if !want[w] {
+			t.Fatalf("unexpected window %q in %v", w, windows)
 		}
 	}
 
@@ -90,8 +98,9 @@ func TestLaunchStartsAgentsAndWritesPIDFile(t *testing.T) {
 	}
 }
 
-func TestDaemonDeliversAndNotifiesViaLivePTY(t *testing.T) {
+func TestDaemonDeliversAndNotifiesViaTmux(t *testing.T) {
 	requirePython(t)
+	requireTmux(t)
 	root := scaffoldTwoPack(t)
 	t.Setenv("HOME", t.TempDir())
 	result, err := Prepare(root)
@@ -115,22 +124,50 @@ func TestDaemonDeliversAndNotifiesViaLivePTY(t *testing.T) {
 	}
 
 	// The daemon goroutine should pick this up within one poll cycle and
-	// write a wake-up directly into cleaner's PTY. A PTY in cooked mode
-	// echoes writes back to the master's read side regardless of whether
-	// the child is actively reading -- so this proves both delivery *and*
-	// the direct-PTY-write Notify mechanism, without needing the idle
-	// child script to cooperate at all.
+	// send the real 3-step tmux wake sequence into cleaner's window --
+	// capture-pane proves both delivery *and* the tmux Notify mechanism,
+	// without needing the idle child script to cooperate at all.
 	waitUntil(t, 4*time.Second, func() bool {
-		screen, ok := run.Screen("cleaner")
-		if !ok {
+		out, err := run.tmux.CapturePane("cleaner")
+		if err != nil {
 			return false
 		}
-		return strings.Contains(screen.Render(), "You have new handoff mail")
+		return strings.Contains(out, "You have new handoff mail")
 	})
+}
+
+func TestShutdownTerminatesAgentsAndRemovesPIDFile(t *testing.T) {
+	requirePython(t)
+	requireTmux(t)
+	root := scaffoldTwoPack(t)
+	t.Setenv("HOME", t.TempDir())
+	result, err := Prepare(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	run, err := Launch(root, result.Project, result.State, 0, idleSpawn)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	if !run.tmux.HasSession() {
+		t.Fatalf("expected a live tmux session before Shutdown")
+	}
+
+	run.Shutdown()
+
+	if run.tmux.HasSession() {
+		t.Fatalf("tmux session still alive after Shutdown")
+	}
+	if _, err := os.Stat(PIDFilePath(root)); !os.IsNotExist(err) {
+		t.Fatalf("PID file should be removed after Shutdown")
+	}
 }
 
 func TestExitedChannelSignalsCleanupRoleExit(t *testing.T) {
 	requirePython(t)
+	requireTmux(t)
 	root := scaffoldTwoPack(t)
 	t.Setenv("HOME", t.TempDir())
 	result, err := Prepare(root)
@@ -149,45 +186,14 @@ func TestExitedChannelSignalsCleanupRoleExit(t *testing.T) {
 		if role != run.CleanupRole() {
 			t.Logf("first exited role was %q (not necessarily the cleanup role -- both exit quickly here)", role)
 		}
-	case <-time.After(3 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatalf("no role exit signaled")
-	}
-}
-
-func TestShutdownTerminatesAgentsAndRemovesPIDFile(t *testing.T) {
-	requirePython(t)
-	root := scaffoldTwoPack(t)
-	t.Setenv("HOME", t.TempDir())
-	result, err := Prepare(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	run, err := Launch(root, result.Project, result.State, 0, idleSpawn)
-	if err != nil {
-		t.Fatalf("Launch: %v", err)
-	}
-
-	var pids []int
-	for _, role := range []string{"coder", "cleaner"} {
-		agent, _ := run.Agent(role)
-		pids = append(pids, agent.Cmd.Process.Pid)
-	}
-
-	run.Shutdown()
-
-	for _, pid := range pids {
-		if processAlive(pid) {
-			t.Fatalf("pid %d still alive after Shutdown", pid)
-		}
-	}
-	if _, err := os.Stat(PIDFilePath(root)); !os.IsNotExist(err) {
-		t.Fatalf("PID file should be removed after Shutdown")
 	}
 }
 
 func TestShutdownIsSafeToCallConcurrentlyMoreThanOnce(t *testing.T) {
 	requirePython(t)
+	requireTmux(t)
 	root := scaffoldTwoPack(t)
 	t.Setenv("HOME", t.TempDir())
 	result, err := Prepare(root)
@@ -218,6 +224,7 @@ func TestShutdownIsSafeToCallConcurrentlyMoreThanOnce(t *testing.T) {
 
 func TestReadPID(t *testing.T) {
 	requirePython(t)
+	requireTmux(t)
 	root := scaffoldTwoPack(t)
 	t.Setenv("HOME", t.TempDir())
 	result, err := Prepare(root)
